@@ -175,30 +175,42 @@ impl Runtime {
     ///     sleep(Duration::from_nanos(u64::from_ne_bytes(buf))).await;
     /// });
     /// ```
-    pub fn check_determinism<F>(seed: u64, config: Config, f: fn() -> F) -> F::Output
+    pub fn check_determinism<F>(
+        seed: u64,
+        config: Config,
+        f: impl Fn() -> F + Send + Sync,
+        change_runtime: impl Fn(&Runtime) + Send + Sync,
+    ) -> F::Output
     where
         F: Future + 'static,
         F::Output: Send,
     {
         let config0 = config.clone();
-        let log = std::thread::spawn(move || {
-            let rt = Runtime::with_seed_and_config(seed, config0);
-            rt.rand.enable_log();
-            rt.block_on(f());
-            rt.rand.take_log().unwrap()
-        })
-        .join()
-        .map_err(|e| panic_with_info(seed, e))
-        .unwrap();
+        let change_runtime = &change_runtime;
+        let f = &f;
+        std::thread::scope(|s| {
+            let log = s
+                .spawn(move || {
+                    let rt = Runtime::with_seed_and_config(seed, config0);
+                    rt.rand.enable_log();
+                    change_runtime(&rt);
+                    rt.block_on(f());
+                    rt.rand.take_log().unwrap()
+                })
+                .join()
+                .map_err(|e| panic_with_info(seed, e))
+                .unwrap();
 
-        std::thread::spawn(move || {
-            let rt = Runtime::with_seed_and_config(seed, config);
-            rt.rand.enable_check(log);
-            rt.block_on(f())
+            s.spawn(move || {
+                let rt = Runtime::with_seed_and_config(seed, config);
+                rt.rand.enable_check(log);
+                change_runtime(&rt);
+                rt.block_on(f())
+            })
+            .join()
+            .map_err(|e| panic_with_info(seed, e))
+            .unwrap()
         })
-        .join()
-        .map_err(|e| panic_with_info(seed, e))
-        .unwrap()
     }
 }
 
