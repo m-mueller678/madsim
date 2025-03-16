@@ -14,7 +14,6 @@ categories = ["asynchronous", "simulation"]
 
 [features]
 default = ["macros", "rpc"]
-ucx = ["async-ucx"]
 rpc = ["bincode"]
 macros = ["madsim-macros", "tokio/macros"]
 # erpc = ["rpc"] # "mad_rpc"
@@ -46,7 +45,6 @@ tokio = { version = "1", features = ["rt", "sync"] }
 toml = "0.8"
 
 [target.'cfg(not(madsim))'.dependencies]
-async-ucx = { version = "0.1", features = ["event"], optional = true }
 tokio = { version = "1", features = [
     "rt",
     "fs",
